@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Silicon Check — Will your apps survive macOS 28?</title>
+<meta name="description" content="macOS 28 drops Intel support and retires Rosetta. Silicon Check scans your Mac for the Intel-only apps and plug-ins that will stop working — including the ones Apple's built-in checker misses. Free Mac app.">
+<link rel="icon" href="assets/icon.png">
+<meta property="og:title" content="Silicon Check — Will your apps survive macOS 28?">
+<meta property="og:description" content="Scan your Mac for Intel-only apps and plug-ins that stop working in macOS 28. Free.">
+<meta property="og:image" content="assets/shot-results.png">
+<meta name="theme-color" content="#0c0d0f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0c0e; --surface: #14161a; --surface-2: #1a1d22;
+    --ink: #f3f4f6; --ink-soft: #9499a2; --ink-dim: #61656d;
+    --line: rgba(255,255,255,0.10); --line-soft: rgba(255,255,255,0.06);
+    --red: #ff5a52; --yellow: #ffd426; --green: #34d65f;
+    --violet: #8b5cf6;
+    --disp: "Bricolage Grotesque", -apple-system, system-ui, sans-serif;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans);
+         line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  ::selection { background: var(--green); color: #04130a; }
+  a { color: inherit; text-decoration: none; }
+  img { display: block; max-width: 100%; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+
+  /* atmosphere: violet bloom (icon) + green relief glow + grain */
+  .bloom { position: fixed; inset: 0; z-index: -2; pointer-events: none; }
+  .bloom::before { content:""; position:absolute; top:-18%; left:50%; transform:translateX(-50%);
+        width: 1100px; height: 760px;
+        background: radial-gradient(50% 50% at 50% 50%, rgba(139,92,246,0.30), transparent 70%);
+        filter: blur(8px); }
+  .bloom::after { content:""; position:absolute; top:32%; right:-10%;
+        width: 620px; height: 620px;
+        background: radial-gradient(50% 50% at 50% 50%, rgba(52,214,95,0.12), transparent 70%); }
+  .grain { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .045;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  .mono { font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
+          text-transform: uppercase; color: var(--ink-dim); }
+
+  /* nav */
+  nav { position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--line-soft);
+        backdrop-filter: saturate(160%) blur(16px);
+        background: color-mix(in srgb, var(--bg) 78%, transparent); }
+  nav .wrap { display: flex; align-items: center; gap: 14px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 11px; font-family: var(--disp);
+           font-weight: 700; font-size: 18px; letter-spacing: -0.2px; }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  nav .links { margin-left: auto; display: flex; align-items: center; gap: 26px;
+               font-size: 14px; color: var(--ink-soft); }
+  nav .links a.t:hover { color: var(--ink); }
+  @media (max-width: 640px) { nav .links a.t { display: none; } }
+
+  .btn { font-family: var(--sans); font-weight: 600; font-size: 14.5px; background: var(--green);
+         color: #04130a; padding: 11px 18px; border-radius: 11px; display: inline-flex;
+         align-items: center; gap: 8px; border: none; cursor: pointer; white-space: nowrap;
+         transition: transform .12s ease, box-shadow .2s ease; box-shadow: 0 6px 22px rgba(52,214,95,0.22); }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 30px rgba(52,214,95,0.32); }
+  .btn:active { transform: translateY(0); }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line);
+               box-shadow: none; }
+  .btn.ghost:hover { border-color: var(--ink-soft); background: rgba(255,255,255,0.03); }
+
+  /* hero */
+  header.hero { padding: 76px 0 30px; text-align: center; }
+  .kicker { display: inline-flex; align-items: center; gap: 9px; padding: 6px 13px;
+            border: 1px solid var(--line); border-radius: 100px; margin-bottom: 26px; }
+  .kicker .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--red);
+            box-shadow: 0 0 0 0 rgba(255,90,82,.6); animation: pulse 2.4s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(255,90,82,.5);} 70%{box-shadow:0 0 0 9px rgba(255,90,82,0);} 100%{box-shadow:0 0 0 0 rgba(255,90,82,0);} }
+  h1 { font-family: var(--disp); font-weight: 800; font-size: clamp(40px, 7vw, 78px);
+       line-height: 0.98; letter-spacing: -1.6px; }
+  h1 .q { color: var(--yellow); }
+  .hero .sub { max-width: 620px; margin: 24px auto 32px; font-size: clamp(17px,2.2vw,20px);
+       color: var(--ink-soft); }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .hero .specline { margin-top: 22px; display: flex; gap: 10px; justify-content: center;
+       flex-wrap: wrap; }
+  .chip { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase;
+       color: var(--ink-soft); border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; }
+
+  /* verdict legend */
+  .legend { display: flex; gap: 0; justify-content: center; flex-wrap: wrap; margin: 44px auto 0;
+       max-width: 760px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+       background: var(--surface); }
+  .legend .v { flex: 1 1 220px; padding: 18px 20px; display: flex; align-items: center; gap: 12px;
+       border-right: 1px solid var(--line-soft); }
+  .legend .v:last-child { border-right: none; }
+  .legend .dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+  .legend .v b { font-family: var(--disp); font-weight: 700; font-size: 15px; display: block; }
+  .legend .v span { font-size: 12.5px; color: var(--ink-soft); }
+  .d-red { background: var(--red); box-shadow: 0 0 14px rgba(255,90,82,.6); }
+  .d-yellow { background: var(--yellow); box-shadow: 0 0 14px rgba(255,212,38,.5); }
+  .d-green { background: var(--green); box-shadow: 0 0 14px rgba(52,214,95,.5); }
+
+  /* framed screenshot with viewfinder corner ticks */
+  .frame { position: relative; margin-top: 56px; }
+  .frame img { width: 100%; border-radius: 14px; border: 1px solid var(--line);
+       box-shadow: 0 40px 100px rgba(0,0,0,0.55); }
+  .frame::before { content:""; position:absolute; inset:-9px; pointer-events:none; --c:var(--ink-dim); --s:18px; --t:1.5px;
+       background:
+        linear-gradient(var(--c),var(--c)) 0 0/var(--s) var(--t) no-repeat,
+        linear-gradient(var(--c),var(--c)) 0 0/var(--t) var(--s) no-repeat,
+        linear-gradient(var(--c),var(--c)) 100% 0/var(--s) var(--t) no-repeat,
+        linear-gradient(var(--c),var(--c)) 100% 0/var(--t) var(--s) no-repeat,
+        linear-gradient(var(--c),var(--c)) 0 100%/var(--s) var(--t) no-repeat,
+        linear-gradient(var(--c),var(--c)) 0 100%/var(--t) var(--s) no-repeat,
+        linear-gradient(var(--c),var(--c)) 100% 100%/var(--s) var(--t) no-repeat,
+        linear-gradient(var(--c),var(--c)) 100% 100%/var(--t) var(--s) no-repeat; }
+  .frame figcaption { font-family: var(--mono); font-size: 10.5px; letter-spacing: 2px;
+       text-transform: uppercase; color: var(--ink-dim); text-align: center; margin-top: 18px; }
+
+  /* sections */
+  section { padding: 84px 0; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase;
+       color: var(--green); margin-bottom: 16px; }
+  h2 { font-family: var(--disp); font-weight: 700; font-size: clamp(28px, 4.4vw, 44px);
+       line-height: 1.05; letter-spacing: -0.8px; }
+  .lead { color: var(--ink-soft); font-size: clamp(16px,2vw,18px); margin-top: 16px; max-width: 620px; }
+
+  /* wedge */
+  .wedge .plugs { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 28px; }
+  .wedge .plugs .chip { color: var(--ink); border-color: var(--line); }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 40px; }
+  @media (max-width: 680px){ .compare { grid-template-columns: 1fr; } }
+  .compare .col { border: 1px solid var(--line); border-radius: 16px; padding: 26px; background: var(--surface); }
+  .compare .col.us { border-color: rgba(52,214,95,0.35); background:
+       linear-gradient(180deg, rgba(52,214,95,0.06), transparent); }
+  .compare h4 { font-family: var(--mono); font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+       color: var(--ink-soft); margin-bottom: 16px; }
+  .compare .col.us h4 { color: var(--green); }
+  .compare ul { list-style: none; display: flex; flex-direction: column; gap: 11px; }
+  .compare li { display: flex; gap: 11px; align-items: flex-start; font-size: 15px; }
+  .compare .mk { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+       font-size: 11px; font-weight: 700; margin-top: 2px; }
+  .compare .no .mk { background: rgba(255,90,82,0.15); color: var(--red); }
+  .compare .yes .mk { background: rgba(52,214,95,0.15); color: var(--green); }
+  .compare .no { color: var(--ink-soft); }
+
+  /* feature grid */
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line-soft);
+       border: 1px solid var(--line-soft); border-radius: 18px; overflow: hidden; margin-top: 8px; }
+  @media (max-width: 680px){ .grid { grid-template-columns: 1fr; } }
+  .cell { background: var(--bg); padding: 32px; }
+  .cell .n { font-family: var(--mono); font-size: 12px; color: var(--green); letter-spacing: 1px; }
+  .cell h3 { font-family: var(--disp); font-weight: 700; font-size: 20px; margin: 14px 0 8px; letter-spacing: -0.3px; }
+  .cell p { color: var(--ink-soft); font-size: 15px; }
+
+  /* steps */
+  .steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; margin-top: 8px; }
+  @media (max-width: 680px){ .steps { grid-template-columns: 1fr; } }
+  .step .num { font-family: var(--disp); font-weight: 800; font-size: 40px; color: var(--surface-2);
+       -webkit-text-stroke: 1px var(--line); line-height: 1; }
+  .step h3 { font-family: var(--disp); font-weight: 700; font-size: 18px; margin: 12px 0 6px; }
+  .step p { color: var(--ink-soft); font-size: 14.5px; }
+
+  /* screenshot catalogue */
+  .specs { display: grid; gap: 56px; margin-top: 16px; }
+  .spec { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; align-items: center; }
+  .spec:nth-child(even) .txt { order: 2; }
+  @media (max-width: 760px){ .spec { grid-template-columns: 1fr; } .spec:nth-child(even) .txt { order: 0; } }
+  .spec .txt .eyebrow { color: var(--ink-dim); }
+  .spec h3 { font-family: var(--disp); font-weight: 700; font-size: clamp(22px,3vw,30px); letter-spacing:-0.5px; }
+  .spec p { color: var(--ink-soft); margin-top: 12px; font-size: 15.5px; }
+  .spec .shot { position: relative; }
+  .spec .shot img { width:100%; border-radius:12px; border:1px solid var(--line);
+       box-shadow: 0 24px 60px rgba(0,0,0,0.5); }
+
+  /* closer */
+  .closer { text-align: center; border: 1px solid var(--line); border-radius: 24px; padding: 72px 28px;
+       background: radial-gradient(70% 120% at 50% 0%, rgba(139,92,246,0.14), var(--surface) 70%); }
+  .closer h2 { margin-bottom: 14px; }
+  .closer p { color: var(--ink-soft); max-width: 520px; margin: 0 auto 28px; font-size: 17px; }
+
+  footer { border-top: 1px solid var(--line-soft); padding: 40px 0 60px; }
+  footer .wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  footer .colo { font-family: var(--mono); font-size: 11px; color: var(--ink-dim); letter-spacing: 1px; }
+  footer .links { margin-left: auto; display: flex; gap: 20px; font-size: 13px; color: var(--ink-soft); }
+  footer .links a:hover { color: var(--ink); }
+
+  /* reveal */
+  .rise { opacity: 0; transform: translateY(20px); }
+  .rise.in { opacity: 1; transform: none; transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+  @media (prefers-reduced-motion: reduce) {
+    .rise { opacity: 1 !important; transform: none !important; }
+    .kicker .pulse { animation: none; }
+    html { scroll-behavior: auto; }
+  }
+  /* hero load stagger */
+  .hero .kicker, .hero h1, .hero .sub, .hero .cta, .hero .specline, .hero .legend {
+    opacity: 0; animation: up .8s cubic-bezier(.2,.7,.2,1) forwards; }
+  .hero h1 { animation-delay: .06s; } .hero .sub { animation-delay: .14s; }
+  .hero .cta { animation-delay: .22s; } .hero .specline { animation-delay: .3s; }
+  .hero .legend { animation-delay: .4s; }
+  @keyframes up { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce){ .hero * { animation: none !important; opacity:1 !important; } }
+</style>
+</head>
+<body>
+<div class="bloom"></div>
+<div class="grain"></div>
+
+<nav><div class="wrap">
+  <a class="brand" href="#"><img src="assets/icon.png" alt="Silicon Check icon">Silicon Check</a>
+  <div class="links">
+    <a class="t" href="#why">Why</a>
+    <a class="t" href="#features">Features</a>
+    <a class="t" href="#shots">Screenshots</a>
+    <a class="t" href="privacy">Privacy</a>
+    <a class="btn" href="#get">Get it free</a>
+  </div>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <span class="kicker"><span class="pulse"></span><span class="mono" style="letter-spacing:2px">macOS 28 · Intel cutoff</span></span>
+  <h1>Will your apps<br>survive macOS 28<span class="q">?</span></h1>
+  <p class="sub">macOS 28 drops Intel support and retires Rosetta — every Intel-only app and plug-in simply stops opening. Silicon Check scans your Mac and tells you exactly what breaks, before you upgrade.</p>
+  <div class="cta" id="get">
+    <a class="btn" href="#">Download free on the Mac App Store</a>
+    <a class="btn ghost" href="#why">See how it works</a>
+  </div>
+  <div class="specline">
+    <span class="chip">Free</span>
+    <span class="chip">Optional tip</span>
+    <span class="chip">No account</span>
+    <span class="chip">Nothing leaves your Mac</span>
+  </div>
+
+  <div class="legend">
+    <div class="v"><span class="dot d-red"></span><div><b>Intel-only</b><span>Stops working in macOS 28</span></div></div>
+    <div class="v"><span class="dot d-yellow"></span><div><b>Universal</b><span>Ready — runs native</span></div></div>
+    <div class="v"><span class="dot d-green"></span><div><b>Apple silicon</b><span>Ready — already native</span></div></div>
+  </div>
+
+  <figure class="frame">
+    <img src="assets/shot-results.png" alt="Silicon Check results: apps and plug-ins sorted into Intel-only, Universal, and Apple silicon">
+    <figcaption>The scan — every app &amp; plug-in, sorted</figcaption>
+  </figure>
+</div></header>
+
+<section id="why" class="wedge"><div class="wrap rise">
+  <p class="eyebrow">The gap Apple won't tell you about</p>
+  <h2>Apple's checker only sees<br>half the picture.</h2>
+  <p class="lead">System Settings lists your Intel <em>apps</em>. It quietly skips your plug-ins — and those stop working too. Silicon Check reads every Mach-O binary on disk, so nothing slips through.</p>
+  <div class="plugs">
+    <span class="chip">Audio Units</span><span class="chip">VST / VST3</span><span class="chip">QuickLook</span>
+    <span class="chip">Spotlight</span><span class="chip">Color Pickers</span><span class="chip">Printer Drivers</span>
+  </div>
+  <div class="compare">
+    <div class="col">
+      <h4>Built-in Settings checker</h4>
+      <ul>
+        <li class="yes"><span class="mk">✓</span><span>Lists Intel applications</span></li>
+        <li class="no"><span class="mk">✕</span><span>Misses audio, QuickLook &amp; Spotlight plug-ins</span></li>
+        <li class="no"><span class="mk">✕</span><span>No last-used date, size, or upgrade path</span></li>
+        <li class="no"><span class="mk">✕</span><span>No report to keep</span></li>
+      </ul>
+    </div>
+    <div class="col us">
+      <h4>Silicon Check</h4>
+      <ul>
+        <li class="yes"><span class="mk">✓</span><span>Apps <em>and</em> every plug-in type</span></li>
+        <li class="yes"><span class="mk">✓</span><span>Reads the real binary — exact, not guessed</span></li>
+        <li class="yes"><span class="mk">✓</span><span>Last used, size &amp; App&nbsp;Store version for each</span></li>
+        <li class="yes"><span class="mk">✓</span><span>Export the whole report as CSV</span></li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section id="features" style="padding-top:0"><div class="wrap rise">
+  <p class="eyebrow">What's inside</p>
+  <h2>A clear verdict for everything you own.</h2>
+  <div class="grid">
+    <div class="cell"><span class="n">01</span><h3>Reads the binary, not a database</h3><p>Silicon Check inspects each app's actual Mach-O header — arm64, Intel, or universal — so the verdict is exact, not a guess from a list someone maintains.</p></div>
+    <div class="cell"><span class="n">02</span><h3>Triage what breaks</h3><p>For every Intel-only item, see when you last opened it, how much space it's hogging, and whether an Apple-silicon version is already on the App Store.</p></div>
+    <div class="cell"><span class="n">03</span><h3>Export the report</h3><p>Save the full results as CSV to plan your upgrade, hand to IT, or keep as a checklist of what to replace.</p></div>
+    <div class="cell"><span class="n">04</span><h3>Private by design</h3><p>Everything runs on your Mac with read-only access you grant. No account, no analytics, nothing about you or your files ever leaves the machine.</p></div>
+  </div>
+</div></section>
+
+<section id="shots" style="padding-top:0"><div class="wrap rise">
+  <p class="eyebrow">A closer look</p>
+  <h2 style="margin-bottom:48px">See it work.</h2>
+  <div class="specs">
+    <div class="spec">
+      <div class="txt"><p class="eyebrow">Specimen 01 — the question</p><h3>Start with one click.</h3><p>Open Silicon Check, hit Scan, and grant read-only access to your apps and plug-in folders. No setup, no configuration.</p></div>
+      <div class="shot"><img src="assets/shot-welcome.png" alt="Silicon Check welcome screen"></div>
+    </div>
+    <div class="spec">
+      <div class="txt"><p class="eyebrow">Specimen 02 — the answer</p><h3>Three buckets, instantly.</h3><p>Everything sorts into Intel-only, Universal, and Apple-silicon — with icons, versions, and the exact path for each item, so you know precisely what's at risk.</p></div>
+      <div class="shot"><img src="assets/shot-results.png" alt="Silicon Check results list"></div>
+    </div>
+    <div class="spec">
+      <div class="txt"><p class="eyebrow">Specimen 03 — the deal</p><h3>Free. A tip if it helped.</h3><p>Every feature is free, with no strings attached. If Silicon Check saved your upgrade, you can leave a one-time tip — but you never have to.</p></div>
+      <div class="shot"><img src="assets/shot-tip.png" alt="Silicon Check tip jar"></div>
+    </div>
+  </div>
+</div></section>
+
+<section style="padding-top:0"><div class="wrap rise">
+  <p class="eyebrow">How it works</p>
+  <h2 style="margin-bottom:44px">Three steps. Two minutes.</h2>
+  <div class="steps">
+    <div class="step"><div class="num">01</div><h3>Open Silicon Check</h3><p>Launch the app — it weighs almost nothing and runs on Intel and Apple-silicon Macs alike.</p></div>
+    <div class="step"><div class="num">02</div><h3>Scan your Mac</h3><p>Grant read-only access and let it read every app and plug-in binary on disk.</p></div>
+    <div class="step"><div class="num">03</div><h3>Act before you upgrade</h3><p>Update, replace, or delete what won't survive — then move to macOS 28 with no surprises.</p></div>
+  </div>
+</div></section>
+
+<section style="padding-top:0"><div class="wrap rise">
+  <div class="closer" id="download">
+    <p class="eyebrow" style="color:var(--ink-soft)">macOS 28 is coming</p>
+    <h2>Know before you upgrade.</h2>
+    <p>Find the Intel apps and plug-ins that won't make the jump — while you still have time to do something about it.</p>
+    <div class="cta"><a class="btn" href="#">Download free on the Mac App Store</a></div>
+    <div class="specline" style="margin-top:22px">
+      <span class="chip">Requires macOS 14+</span>
+      <span class="chip">Universal</span>
+      <span class="chip">Free · optional tip</span>
+    </div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <span class="colo">SILICON CHECK™ · v1.0 · A MIMOSA AGENCY TOOL</span>
+  <div class="links">
+    <a href="https://danilosierra.com">danilosierra.com</a>
+    <a href="https://mimosaagency.com">mimosaagency.com</a>
+    <a href="privacy">Privacy</a>
+    <a href="mailto:danilo@mimosaagency.com">Contact</a>
+  </div>
+</div></footer>
+
+<script>
+  const io = new IntersectionObserver((es) => {
+    es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.rise').forEach(el => io.observe(el));
+</script>
+</body>
+</html>
